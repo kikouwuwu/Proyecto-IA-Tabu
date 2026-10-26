@@ -138,3 +138,62 @@ preprocesadas. En la carpeta de salida guarda:
 
 
 Y eso!! Estas son las funciones básicas de lectura de imágenes, intensidades, etc. Este es el punto de partida, de acá en adelante te toca implementar la parte algorítmica :D.
+---
+
+# Proyecto: Segmentación multiumbral con Búsqueda Tabú (estado de avance)
+
+Programa `tabu`: lee una instancia, genera una **solución inicial** (greedy o aleatoria),
+la mejora con **Búsqueda Tabú**, la **evalúa** con el criterio de Otsu y **escribe** el resultado. No usa OpenCV.
+
+## Archivos del proyecto
+
+| Archivo | Qué hace |
+| --- | --- |
+| `instancia.hpp/.cpp` | Lee y valida el `.txt` (cabecera, campos, suma del histograma = N) y precalcula sumas acumuladas. |
+| `solucion.hpp/.cpp` | Representación, restricciones, función de evaluación, greedy, aleatoria y escritura de la salida. |
+| `tabu.hpp/.cpp` | Búsqueda Tabú: movimientos ±1 y ±10, lista tabú y criterio de aspiración. |
+| `main.cpp` | Une todo: parámetros por consola → lectura → solución inicial → Tabú → salida. |
+
+## En 6 líneas
+
+1. **Solución** = vector ordenado de k umbrales `t1 < ... < tk`, cada uno en `[1, 254]`.
+2. **Clases** = `[0,t1]`, `[t1+1,t2]`, …, `[tk+1,255]` (igual que `mri::segmentar`).
+3. **Evaluación (Otsu)** = `f = Σ w_j (mu_j − muT)²`; con sumas acumuladas cuesta O(k).
+4. **Greedy** = agrega un umbral a la vez, el que más sube f. **Aleatoria** = k valores distintos al azar, ordenados.
+5. **Restricciones** = se cumplen por construcción; `esFactible()` rechaza lo que no las cumpla.
+6. **Tabú** = en cada iteración mueve un umbral ±1 o ±10 al mejor vecino no prohibido (aunque empeore),
+   prohíbe volver al valor anterior por `tenencia` iteraciones y guarda la mejor solución vista.
+
+## Uso
+
+```bash
+make tabu
+./tabu imagenes_preprocesadas/instancias/imagen_01_k2.txt -k 3          # Tabú desde greedy, 3 umbrales
+./tabu imagenes_preprocesadas/instancias/imagen_01_k4.txt -m aleatoria -s 7 -o salida.txt
+./tabu imagenes_preprocesadas/instancias/imagen_01_k6.txt -t 10 -i 500  # otra tenencia e iteraciones
+./tabu imagenes_preprocesadas/instancias/imagen_01_k2.txt -i 0          # solo la solución inicial
+make probar                                                            # las 30 instancias → resultados/
+```
+
+Salida (ejemplo `imagen_01`, k = 3): greedy parte en (18, 49, 110) con f = 2039,81 y Tabú llega a
+
+```text
+metodo tabu desde greedy (tenencia 7, iteraciones 1000, mejor en iteracion 8)
+umbrales 28 72 119
+f 2062.638907
+# clase desde hasta pixeles proporcion media
+0 0 28 42198 0.643890 2.663
+...
+```
+
+## Resultados (30 instancias, tenencia 7, 1000 iteraciones)
+
+- Desde greedy, Tabú alcanza el óptimo exacto en las 30 instancias (comparado con fuerza bruta en k = 2 y programación dinámica en k = 4 y 6).
+- Desde aleatoria llega al mismo valor en 29 de 30; la excepción es una instancia con k = 6.
+- Cada instancia tarda menos de 3 ms.
+
+## Pendiente
+
+- Criterio de término por estancamiento (hoy siempre hace todas las iteraciones).
+- Calibrar tenencia e iteraciones y reportar varias semillas desde aleatoria.
+- Generar las imágenes segmentadas finales con `segmentar`.

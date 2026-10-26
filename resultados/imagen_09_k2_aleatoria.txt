@@ -1,0 +1,9 @@
+instancia imagen_09.jpg k=2
+metodo tabu desde aleatoria (tenencia 7, iteraciones 1000, mejor en iteracion 20)
+umbrales 31 104
+f 1167.990580
+tiempo_ms 0.5106
+# clase desde hasta pixeles proporcion media
+0 0 31 43519 0.664047 3.099
+1 32 104 19960 0.304565 59.784
+2 105 255 2057 0.031387 148.791

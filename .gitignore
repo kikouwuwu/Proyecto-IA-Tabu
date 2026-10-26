@@ -1,0 +1,6 @@
+# Ejecutables y archivos de compilacion
+tabu
+preprocesar
+segmentar
+*.o
+*.d
