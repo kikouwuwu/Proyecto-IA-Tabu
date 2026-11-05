@@ -1,5 +1,6 @@
 # Ejecutables y archivos de compilacion
 tabu
+optimo
 preprocesar
 segmentar
 *.o

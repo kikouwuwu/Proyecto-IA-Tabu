@@ -21,15 +21,15 @@ bool esFactible(const Solucion& t, const Instancia& ins) {
 
 // Aporte de la clase [a, b]: w * mu^2 = (suma x*p_x)^2 / (suma p_x).
 // Las sumas del intervalo salen de restar acumulados: O(1).
-static double aporteClase(int a, int b, const Instancia& ins) {
+double aporteClase(int a, int b, const Instancia& ins) {
     double w = ins.P[b] - (a > 0 ? ins.P[a - 1] : 0.0);
     double s = ins.S[b] - (a > 0 ? ins.S[a - 1] : 0.0);
     return w > 0 ? s * s / w : 0.0;   // clase vacia: aporte 0
 }
 
 // Usa la forma equivalente f = sum_j w_j*mu_j^2 - muT^2 (mismo valor, menos calculos).
-// Recibe umbrales ordenados; no exige que sean exactamente k (lo usa el greedy).
-static double evaluarParcial(const Solucion& t, const Instancia& ins) {
+double evaluar(const Solucion& t, const Instancia& ins) {
+    if (!esFactible(t, ins)) throw invalid_argument("Solucion no factible");
     double suma = 0.0;
     int desde = 0;
     for (int ti : t) {
@@ -40,37 +40,14 @@ static double evaluarParcial(const Solucion& t, const Instancia& ins) {
     return suma - ins.muT * ins.muT;
 }
 
-double evaluar(const Solucion& t, const Instancia& ins) {
-    if (!esFactible(t, ins)) throw invalid_argument("Solucion no factible");
-    return evaluarParcial(t, ins);
-}
-
-Solucion solucionGreedy(const Instancia& ins) {
-    Solucion t;
-    for (int paso = 0; paso < ins.k; ++paso) {
-        int mejorValor = -1;
-        double mejorF = -1.0;
-        // Prueba cada intensidad libre como nuevo umbral y se queda con la mejor.
-        for (int g = 1; g <= ins.L - 2; ++g) {
-            if (find(t.begin(), t.end(), g) != t.end()) continue;
-            Solucion candidata = t;
-            candidata.insert(upper_bound(candidata.begin(), candidata.end(), g), g);
-            double f = evaluarParcial(candidata, ins);
-            if (f > mejorF) { mejorF = f; mejorValor = g; }
-        }
-        t.insert(upper_bound(t.begin(), t.end(), mejorValor), mejorValor);
-    }
-    return t;   // ya ordenada y en rango: factible por construccion
-}
-
 Solucion solucionAleatoria(const Instancia& ins, unsigned semilla) {
     vector<int> valores;
     for (int g = 1; g <= ins.L - 2; ++g) valores.push_back(g);
     mt19937 rng(semilla);
     shuffle(valores.begin(), valores.end(), rng);
-    Solucion t(valores.begin(), valores.begin() + ins.k);  // k distintos
-    sort(t.begin(), t.end());                              // ordenados
-    return t;
+    Solucion t(valores.begin(), valores.begin() + ins.k);  // k distintos (R2)
+    sort(t.begin(), t.end());                              // ordenados (R2)
+    return t;   // todos en [1, 254] (R1): factible por construccion
 }
 
 void escribirSolucion(const Solucion& t, const Instancia& ins,

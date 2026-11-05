@@ -30,10 +30,12 @@ bool esFactible(const Solucion& t, const Instancia& ins);
 // Evalua en O(k) usando las sumas acumuladas P y S de la instancia.
 double evaluar(const Solucion& t, const Instancia& ins);
 
-// Greedy: agrega un umbral a la vez, eligiendo el valor que mas sube f.
-Solucion solucionGreedy(const Instancia& ins);
+// Aporte de la clase [a, b] a la forma equivalente de f: w * mu^2.
+// Tambien lo usa optimo.cpp.
+double aporteClase(int a, int b, const Instancia& ins);
 
-// Aleatoria: k valores distintos en [1, 254], ordenados. Reproducible por semilla.
+// Solucion inicial aleatoria: k valores distintos en [1, 254], ordenados.
+// La misma semilla entrega siempre la misma solucion.
 Solucion solucionAleatoria(const Instancia& ins, unsigned semilla);
 
 // Escribe umbrales, f y una tabla por clase. Si ruta es "-", escribe en consola.

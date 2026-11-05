@@ -1,9 +1,0 @@
-instancia imagen_10.jpg k=2
-metodo tabu desde greedy (tenencia 7, iteraciones 1000, mejor en iteracion 4)
-umbrales 30 102
-f 1277.706626
-tiempo_ms 0.5150
-# clase desde hasta pixeles proporcion media
-0 0 30 44037 0.671951 3.111
-1 31 102 18643 0.284470 58.028
-2 103 255 2856 0.043579 146.699

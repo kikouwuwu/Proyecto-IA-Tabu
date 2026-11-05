@@ -1,24 +1,30 @@
-// main.cpp — Lee una instancia, genera una solucion inicial, la mejora con
-// Busqueda Tabu y escribe el resultado.
+// main.cpp — Lee una instancia, genera una solucion inicial aleatoria, la mejora
+// con Busqueda Tabu y escribe el resultado.
 //
 // Uso:
-//   ./tabu <instancia.txt> [-k K] [-m greedy|aleatoria] [-s semilla]
-//                      [-t tenencia] [-i iteraciones] [-o salida.txt]
+//   ./tabu <instancia.txt> [-k K] [-s semilla] [-t tenencia] [-p paso_largo]
+//          [-i iteraciones] [-e estancamiento] [-o salida.txt] [-a avance.csv] [-c]
 //
 //   -k  cambia la cantidad de umbrales (por defecto, la k de la instancia)
-//   -m  metodo de solucion inicial (por defecto greedy)
-//   -s  semilla para el metodo aleatorio (por defecto 42)
-//   -t  tenencia: iteraciones que dura una prohibicion (por defecto 7)
-//   -i  iteraciones de la Busqueda Tabu (por defecto 1000; 0 = solo solucion inicial)
+//   -s  semilla de la solucion inicial aleatoria (por defecto 1)
+//   -t  tenencia: iteraciones que dura una prohibicion (por defecto 15)
+//   -p  tamano del salto largo M2 (por defecto 20; 0 = solo movimientos +-1)
+//   -i  maximo de iteraciones (por defecto 1000; 0 = solo solucion inicial)
+//   -e  iteraciones seguidas sin mejora para detenerse (por defecto 200; 0 = no se usa)
 //   -o  archivo de salida (por defecto, solo consola)
+//   -a  guarda el avance de la busqueda: iteracion, f actual y f mejor
+//   -c  modo experimento: imprime una sola linea CSV con el resumen de la ejecucion
 //
-// Ejemplo (3 umbrales sobre la imagen 1):
-//   ./tabu imagenes_preprocesadas/instancias/imagen_01_k2.txt -k 3
+// Ejemplos:
+//   ./tabu imagenes_preprocesadas/instancias/imagen_01_k4.txt
+//   ./tabu imagenes_preprocesadas/instancias/imagen_01_k2.txt -k 3 -s 5 -o salida.txt
 #include "instancia.hpp"
 #include "solucion.hpp"
 #include "tabu.hpp"
 
 #include <chrono>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <string>
 
@@ -27,28 +33,36 @@ using namespace std;
 int main(int argc, char** argv) {
     if (argc < 2) {
         cerr << "Uso: " << argv[0]
-             << " <instancia.txt> [-k K] [-m greedy|aleatoria] [-s semilla] [-t tenencia] [-i iteraciones] [-o salida.txt]\n";
+             << " <instancia.txt> [-k K] [-s semilla] [-t tenencia] [-p paso_largo]"
+                " [-i iteraciones] [-e estancamiento] [-o salida.txt] [-a avance.csv] [-c]\n";
         return 1;
     }
     try {
         // 1) Parametros por consola.
-        string ruta = argv[1], metodo = "greedy", salida = "-";
-        int k = -1, tenencia = 7, iteraciones = 1000;
-        unsigned semilla = 42;
-        for (int i = 2; i + 1 < argc; i += 2) {
-            string op = argv[i], val = argv[i + 1];
+        string ruta = argv[1], salida = "-", rutaAvance = "";
+        int k = -1;
+        unsigned semilla = 1;
+        bool modoCsv = false;
+        ParametrosTabu par;
+        for (int i = 2; i < argc; ++i) {
+            string op = argv[i];
+            if (op == "-c") { modoCsv = true; continue; }
+            if (i + 1 >= argc) throw invalid_argument("Falta el valor de " + op);
+            string val = argv[++i];
             if (op == "-k") k = stoi(val);
-            else if (op == "-m") metodo = val;
             else if (op == "-s") semilla = stoul(val);
-            else if (op == "-t") tenencia = stoi(val);
-            else if (op == "-i") iteraciones = stoi(val);
+            else if (op == "-t") par.tenencia = stoi(val);
+            else if (op == "-p") par.pasoLargo = stoi(val);
+            else if (op == "-i") par.iteraciones = stoi(val);
+            else if (op == "-e") par.estancamiento = stoi(val);
             else if (op == "-o") salida = val;
+            else if (op == "-a") rutaAvance = val;
             else throw invalid_argument("Opcion desconocida: " + op);
         }
-        if (metodo != "greedy" && metodo != "aleatoria")
-            throw invalid_argument("Metodo desconocido: " + metodo);
-        if (tenencia < 0 || iteraciones < 0)
-            throw invalid_argument("Tenencia e iteraciones deben ser >= 0");
+        if (par.tenencia < 0 || par.pasoLargo < 0 || par.iteraciones < 0 || par.estancamiento < 0)
+            throw invalid_argument("Los parametros de Tabu deben ser >= 0");
+        if (par.pasoLargo == 1)
+            throw invalid_argument("El paso largo debe ser 0 o mayor que 1");
 
         // 2) Lectura de la instancia.
         Instancia ins = leerInstancia(ruta);
@@ -56,24 +70,47 @@ int main(int argc, char** argv) {
             if (k < 1 || k > ins.L - 2) throw invalid_argument("k fuera de rango");
             ins.k = k;
         }
-        mostrarInstancia(ins);
+        if (!modoCsv) mostrarInstancia(ins);
+
+        ofstream archivoAvance;
+        if (!rutaAvance.empty()) {
+            archivoAvance.open(rutaAvance);
+            if (!archivoAvance) throw runtime_error("No se pudo escribir: " + rutaAvance);
+            archivoAvance << "iteracion,f_actual,f_mejor\n" << fixed << setprecision(6);
+        }
 
         // 3) Solucion inicial + Busqueda Tabu (se mide el tiempo total).
         auto inicio = chrono::steady_clock::now();
-        Solucion inicial;
-        if (metodo == "greedy") inicial = solucionGreedy(ins);
-        else inicial = solucionAleatoria(ins, semilla);
-        ResultadoTabu res = busquedaTabu(inicial, ins, tenencia, iteraciones);
+        Solucion inicial = solucionAleatoria(ins, semilla);
+        ResultadoTabu res = busquedaTabu(inicial, ins, par,
+                                         rutaAvance.empty() ? nullptr : &archivoAvance);
         double ms = chrono::duration<double, milli>(chrono::steady_clock::now() - inicio).count();
+        double fInicial = evaluar(inicial, ins);
 
-        // 4) Escritura: primero la inicial (como referencia) y luego la final.
-        cout << "\nSolucion inicial (" << metodo << "): umbrales";
+        // 4a) Modo experimento: una linea CSV (el encabezado lo pone experimentos.sh).
+        if (modoCsv) {
+            cout << ins.imagen << ',' << ins.k << ',' << semilla << ',' << par.tenencia << ','
+                 << par.pasoLargo << ',' << par.iteraciones << ',' << par.estancamiento << ','
+                 << fixed << fInicial << ',' << res.fMejor << ',' << res.iteracionMejor << ','
+                 << res.iteracionesHechas << ',' << ms << ',';
+            for (int i = 0; i < ins.k; ++i) cout << (i ? " " : "") << res.mejor[i];
+            cout << "\n";
+            return 0;
+        }
+
+        // 4b) Escritura normal: primero la inicial (como referencia) y luego la final.
+        cout << "\nSolucion inicial (aleatoria, semilla " << semilla << "): umbrales";
         for (int ti : inicial) cout << ' ' << ti;
-        cout << ", f = " << evaluar(inicial, ins) << "\n";
-        cout << "Tabu: mejor en iteracion " << res.iteracionMejor << " de " << iteraciones << "\n\n";
+        cout << ", f = " << fInicial << "\n";
+        cout << "Tabu: " << res.iteracionesHechas << " iteraciones, mejor en la iteracion "
+             << res.iteracionMejor << "\n\n";
 
-        string descripcion = "tabu desde " + metodo + " (tenencia " + to_string(tenencia) +
-                             ", iteraciones " + to_string(iteraciones) +
+        string descripcion = "tabu desde aleatoria (semilla " + to_string(semilla) +
+                             ", tenencia " + to_string(par.tenencia) +
+                             ", paso largo " + to_string(par.pasoLargo) +
+                             ", iteraciones " + to_string(res.iteracionesHechas) +
+                             " de " + to_string(par.iteraciones) +
+                             ", estancamiento " + to_string(par.estancamiento) +
                              ", mejor en iteracion " + to_string(res.iteracionMejor) + ")";
         escribirSolucion(res.mejor, ins, descripcion, ms, "-");
         if (salida != "-") {
